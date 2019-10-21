@@ -1,24 +1,16 @@
-/**
- * @author       Digitsensitive <digit.sensitivee@gmail.com>
- * @copyright    2018 - 2019 digitsensitive
- * @description  Asteroid: Game Scene
- * @license      Digitsensitive
- */
-
-import { Asteroid } from "../objects/asteroid";
-import { Bullet } from "../objects/bullet";
-import { Ship } from "../objects/ship";
-import { CONST } from "../const/const";
+import { ReadOut } from "../../../common/classes/readOut";
 
 export class GameScene extends Phaser.Scene {
-  private g_grid: Phaser.GameObjects.Grid;
-  private g_text: Phaser.GameObjects.Text;
-  private g_text2: Phaser.GameObjects.Text;
-  private g_gCircle: Phaser.GameObjects.Graphics;
-  private g_spaceShip: Phaser.GameObjects.Graphics;
-  private g_courseAdjuster: Phaser.GameObjects.Graphics;
-  private g_newCourse: number;
-  private g_drot: number = 1;
+  private readOut: ReadOut = new ReadOut;
+
+  private text: Phaser.GameObjects.Text;
+  private text2: Phaser.GameObjects.Text;
+  private spaceShip: Phaser.GameObjects.Graphics;
+  private courseAdjuster: Phaser.GameObjects.Graphics;
+  private newCourse: number;
+  private container: Phaser.GameObjects.Container;
+  private drot: number = 1;
+  private ZOOM: number = 2;
 
   constructor() {
     super({
@@ -43,18 +35,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   private adjustCourse(pointer) {
-    this.g_courseAdjuster.visible = true;
+    var width: any = this.game.config.width;
+    var height: any = this.game.config.height;
+
+    this.courseAdjuster.visible = true;
     var angleRadians = Phaser.Math.Angle.Between(
-      this.g_spaceShip.body.x,
-      this.g_spaceShip.body.y,
+      this.container.body.x,
+      this.container.body.y,
       pointer.x + this.cameras.main.scrollX,
       pointer.y + this.cameras.main.scrollY,
     );
+
     var angleDegrees = Phaser.Math.RadToDeg(angleRadians) + 90;
-    this.g_courseAdjuster.angle = angleDegrees;
-    this.g_text2.x = pointer.x + this.cameras.main.scrollX - 70;
-    this.g_text2.y = pointer.y + this.cameras.main.scrollY - 70;
-    this.g_text2.setText(this.formatAngle(angleDegrees));
+    this.courseAdjuster.angle = angleDegrees;
+
+    this.text2.x = (pointer.x / this.ZOOM) - (1.25 * width) / (2 * this.ZOOM);
+    this.text2.y = (pointer.y / this.ZOOM) - (1.25 * height) / (2 * this.ZOOM);
+
+    this.text2.setText(this.formatAngle(angleDegrees));
+
     return angleDegrees;
   }
 
@@ -68,7 +67,7 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointerup', function (pointer) {
       isPointerDown = false;
-      this.g_newCourse = this.adjustCourse(pointer);
+      this.newCourse = this.adjustCourse(pointer);
     }, this);
 
     this.input.on('pointermove', function (pointer) {
@@ -80,92 +79,89 @@ export class GameScene extends Phaser.Scene {
     var width: any = this.game.config.width;
     var height: any = this.game.config.height;
 
-    this.g_grid = this.add.grid(
-      0,
-      0,
-      width * 3,
-      height * 2,
+    this.add.grid(
+      0, 0,
+      width * 3, height * 2,
       32,
       32,
       0x057605
     );
 
-    this.g_text = this.add.text(50, -20, "");
-    this.physics.add.existing(this.g_text, false);
+    this.text = this.add.text(50, -20, "");
+    this.text2 = this.add.text(0, 0, "");
 
-    this.g_text2 = this.add.text(0, 0, "");
-    this.physics.add.existing(this.g_text2, false);
+    var circle = this.add.graphics();
+    circle.x = 0;
+    circle.y = 0;
+    circle.fillStyle(0xff0000, 0.3);
+    circle.fillCircle(256, 256, 256);
 
-    this.g_gCircle = this.add.graphics();
-    this.g_gCircle.x = 0;
-    this.g_gCircle.y = 0;
-    this.g_gCircle.fillStyle(0xff0000, 0.3);
-    this.g_gCircle.fillCircle(256, 256, 256);
+    this.spaceShip = this.add.graphics();
+    this.drawSpaceShip(this.spaceShip);
+    this.spaceShip.fillStyle(0x00ff00);
+    this.spaceShip.fillPath();
 
-    this.g_spaceShip = this.add.graphics();
-    this.physics.add.existing(this.g_spaceShip, false);
-    this.drawSpaceShip(this.g_spaceShip);
-    this.g_spaceShip.fillStyle(0x00ff00);
-    this.g_spaceShip.fillPath();
+    this.courseAdjuster = this.add.graphics();
+    this.courseAdjuster.visible = false;
+    this.courseAdjuster.fillStyle(0x00ff00, 0.2);
+    this.courseAdjuster.fillCircle(0, 0, 42);
+    this.drawSpaceShip(this.courseAdjuster);
+    this.courseAdjuster.fillPath();
 
-    this.g_courseAdjuster = this.add.graphics();
-    this.physics.add.existing(this.g_courseAdjuster, false);
-    this.g_courseAdjuster.visible = false;
-    this.g_courseAdjuster.fillStyle(0x00ff00, 0.2);
-    this.g_courseAdjuster.fillCircle(0, 0, 42);
-    this.drawSpaceShip(this.g_courseAdjuster);
-    this.g_courseAdjuster.fillPath();
+    this.container = this.add.container(0, 0);
+    this.physics.add.existing(this.container, false);
+    this.container.add([this.text, this.text2, this.spaceShip, this.courseAdjuster]);
+
+    this.cameras.main.startFollow(this.container, false);
+    this.cameras.main.setZoom(this.ZOOM);
   }
 
   update(): void {
 
     var shortestBetween = Phaser.Math.Angle.ShortestBetween(
-      this.g_spaceShip.angle,
-      this.g_newCourse
+      this.spaceShip.angle,
+      this.newCourse
     );
 
     if (shortestBetween == 0) {
-    } else if (Math.abs(shortestBetween) <= this.g_drot) {
-      this.g_newCourse = this.g_spaceShip.angle;
-      this.g_text.setText("\n" + this.formatAngle(this.g_spaceShip.angle));
+    } else if (Math.abs(shortestBetween) <= this.drot) {
+      this.newCourse = this.spaceShip.angle;
+      this.readOut.clear();
+      this.readOut.setText("\n" + this.formatAngle(this.spaceShip.angle));
       this.time.delayedCall(2000, function () {
-        this.g_text.setText("");
+        this.readOut.clear();
       }, null, this);
       this.time.delayedCall(1000, function () {
         var shortestBetween2 = Phaser.Math.Angle.ShortestBetween(
-          this.g_spaceShip.angle,
-          this.g_newCourse
+          this.spaceShip.angle,
+          this.newCourse
         );
-        if (Math.abs(shortestBetween2) <= this.g_drot) {
-          this.g_text2.setText("");
-          this.g_courseAdjuster.visible = false;
+        if (Math.abs(shortestBetween2) <= this.drot) {
+          this.text2.setText("");
+          this.courseAdjuster.visible = false;
         }
       }, null, this);
     } else if (shortestBetween > 0) {
-      this.g_spaceShip.angle += this.g_drot;
-      this.g_text.setText(
+      this.spaceShip.angle += this.drot;
+      this.readOut.setText(
         "     -0°" +
-        "\n" + this.formatAngle(this.g_spaceShip.angle) +
+        "\n" + this.formatAngle(this.spaceShip.angle) +
         "\n     +" + this.formatAngle(shortestBetween)
       );
     } else if (shortestBetween < 0) {
-      this.g_spaceShip.angle -= this.g_drot;
-      this.g_text.setText(
+      this.spaceShip.angle -= this.drot;
+      this.readOut.setText(
         "     -" + this.formatAngle(360 - shortestBetween) +
-        "\n" + this.formatAngle(this.g_spaceShip.angle) +
+        "\n" + this.formatAngle(this.spaceShip.angle) +
         "\n     +0°"
       );
     }
 
-    var radians = Phaser.Math.DegToRad(this.g_spaceShip.angle);
+    var radians = Phaser.Math.DegToRad(this.spaceShip.angle);
     var vx = 20 * Math.sin(radians);
     var vy = -20 * Math.cos(radians);
-    this.g_spaceShip.body.setVelocity(vx, vy);
-    this.g_courseAdjuster.body.setVelocity(vx, vy);
+    this.container.body.setVelocity(vx, vy);
 
-    this.g_text.body.setVelocity(vx, vy);
-    this.g_text2.body.setVelocity(vx, vy);
-
-    this.cameras.main.centerOn(this.g_spaceShip.body.x, this.g_spaceShip.body.y);
+    this.text.setText(this.readOut.getText());
   }
 }
